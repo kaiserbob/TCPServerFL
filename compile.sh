@@ -1,1 +1,1 @@
-javac MyServer.java
+javac *.java
