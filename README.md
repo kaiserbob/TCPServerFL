@@ -1,5 +1,5 @@
-# TCPServerFL
-TCP Server for CS7051
+# Chat Server FL
+Chat Server for CS7051 - Lab 3
 
 Usage :
   - make sure to have java installed properly
