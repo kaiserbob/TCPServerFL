@@ -5,8 +5,25 @@ public class ChatRoom {
 	private String name;
 	private ArrayList <ClientChat> chatUsers;
 	
-	public ChatRoom () {
+	public ChatRoom (String name) {
+		this.name = name;
+		this.room_ref = hashCode(name);
 		this.chatUsers = new ArrayList<ClientChat>();
+	}
+	
+	public ChatRoom () {
+		this.name = "";
+		this.room_ref = 0;
+		this.chatUsers = new ArrayList<ClientChat>();
+	}
+	
+	public int hashCode(String str) {
+		  int hash = 0;
+		  for (int i = 0; i < str.length(); i++) 
+		  {
+		    hash = hash * 31 + str.charAt(i);
+		  }
+		  return Math.abs(hash);
 	}
 	
 	public int getRoom_ref() {
