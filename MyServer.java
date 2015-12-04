@@ -20,6 +20,9 @@ public class MyServer {
 	public MyServer(ServerSocket srvSck){
 		this.sSocket = srvSck;
 		this.roomsBook = new ArrayList <ChatRoom> ();
+		ChatRoom r1 = new ChatRoom("room1");
+		this.roomsBook.add(r1);
+		
 	}
 	
 	/**
@@ -48,6 +51,7 @@ public class MyServer {
 		
 		private Socket socket;
 		private String request;
+		private ArrayList <String> reqTable;
 		private MyServer server;
 		private boolean killServer;
 		
@@ -55,6 +59,7 @@ public class MyServer {
 			this.socket = socket;
 			this.server = server;
 			this.killServer = false;
+			this.reqTable= new ArrayList <String>();
 		}
 		
 		/**
@@ -96,15 +101,17 @@ public class MyServer {
 		 * @return the ref of the room as an integer.
 		 */
 		public int getRoomRefFromName (String name) {
+			int retour = 0;
+			ChatRoom cr = new ChatRoom();
 			Iterator <ChatRoom> it = roomsBook.iterator();
 			while (it.hasNext())
 			{
-				if (name.compareTo(it.next().getName())==0)
+				if (name.compareTo((cr=it.next()).getName())==0)
 				{
-					return (it.next().getRoom_ref());
+					retour = cr.getRoom_ref();
 				}
 			}
-			return 0;
+			return retour;
 		}
 		
 		/**
@@ -117,9 +124,9 @@ public class MyServer {
 			ChatRoom cr = new ChatRoom();
 			while (it.hasNext())
 			{
-				if ( roomRef == it.next().getRoom_ref())
+				if ( roomRef == (cr=it.next()).getRoom_ref())
 				{
-					cr = it.next();
+					return cr;
 				}
 			}
 			return cr;
@@ -156,7 +163,6 @@ public class MyServer {
 			Iterator <ClientChat> it = cr.getChatUsers().iterator();
 			while (it.hasNext())
 			{
-				msg = userName + " says : " + msg;
 				sendMsg(it.next().getSocket(), msg);
 			}
 		}
@@ -167,17 +173,15 @@ public class MyServer {
 		 * @return : returns a String containing the message to send back to the client
 		 * @throws IOException 
 		 */
-		public String leaveChat(ChatRoom cr, String msg) throws IOException {
-			String[] leaveTable;
+		public String leaveChat(ChatRoom cr, ArrayList <String> msg) throws IOException {
 			String retour = "";
 			Iterator <ClientChat> it = cr.getChatUsers().iterator();
-			leaveTable = msg.split("\n");
-			retour = "\nLEFT_CHATROOM:" + leaveTable[0].substring(15) + "\nJOIN_ID:" + leaveTable[1].substring(8);
+			retour = "LEFT_CHATROOM:" + msg.get(0).substring(15) + "\nJOIN_ID:" + msg.get(1).substring(8);
 			while (it.hasNext())
 			{
-				if (Integer.parseInt(leaveTable[1].substring(8)) == it.next().getJoined_id())
+				if (Integer.parseInt(msg.get(1).substring(8)) == it.next().getJoined_id())
 				{
-					broadcast(cr, it.next().getNick(), "A client has left the room. Good bye, " + leaveTable[2].substring(12));
+					broadcast(cr, it.next().getNick(), "A client has left the room. Good bye, " + msg.get(2).substring(12));
 					it.remove();
 				}
 			}
@@ -197,7 +201,7 @@ public class MyServer {
 					retour = "ERROR_CODE: 1\nERROR_DESCRIPTION: This chat room doesn't exist.";
 				// The client  is sending a wrong command 
 				case 2:
-					retour = "ERROR_CODE: 2\nERROR_DESCRIPTION: Server can only process HELO, JOIN_CHATROOM and KILL_SERVICE typed messages.";
+					retour = "ERROR_CODE: 2\nERROR_DESCRIPTION: Server can not process this type of command.";
 			}
 			return retour;		
 		}
@@ -241,10 +245,10 @@ public class MyServer {
 		 * @param joinRequest : Takes the CHAT message as input
 		 * @return : Returns a string, the original message
 		 */
-		public String msgDeadler(String[] joinRequest){
-			String retour = joinRequest[3].substring(8);
+		public String msgDealer(ArrayList<String> msg){
+			String retour = "CHAT:"+msg.get(0).substring(5)+"\nJOIN_ID:"+msg.get(2).substring(12)+"\nMESSAGE:"+msg.get(3).substring(8);
 			try {
-				broadcast(getChatRoomFromRef(Integer.parseInt(joinRequest[0].substring(5))), joinRequest[2].substring(12), retour);
+				broadcast(getChatRoomFromRef(Integer.parseInt(msg.get(0).substring(5))), msg.get(2).substring(12), retour);
 			} catch (NumberFormatException | IOException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
@@ -253,24 +257,50 @@ public class MyServer {
 		}
 		
 		/**
+		 * Use this method to determine the number of iteration of the for loop, waiting for a message coming from
+		 * the client to be fully completed before sending it to the process method
+		 * @param command : Takes the command sent by the client to determine how many other messages we should expect from him
+		 * @return : Returns an integer to adapt the loop
+		 */
+		public int msgMakingLoop (String command){
+			int i;
+			if (command.startsWith("LEAVE") || command.startsWith("DISCONNECT")) 
+			{
+				i=1;
+			}
+			else if (command.startsWith("JOIN") || command.startsWith("CHAT")) 
+			{
+				i=0;
+			}
+			else
+				i=5;
+			return i;
+		}
+		
+		/**
+		 * Use this method to append data to the ArrayList of the request before sending it to be processed
+		 * @param request Takes as input the incoming data from client and adds it to the ArrayList
+		 */
+		public void addReqTable(String request) {
+			this.reqTable.add(request);
+		}
+		
+		/**
 		 * 
-		 * @param msg :  is a String received from the client that need to be processed
-		 * @return : returns a String, either he standardized answer to an HELO command, or send the client for a valid command if it's not
+		 * @param msg :  is an ArrayList of Strings received from the client that need to be processed
+		 * @return : returns a String, either the standardized answer to a valid (or not) command, 
 		 * Or process with the termination of the service to answer the KILL_SERVICE request
 		 * @throws IOException 
 		 */
-		public String processMsg (String msg) throws IOException{
-			String dataSorter, clientIP, roomName, clientName, msgToSend;
-			String[] joinRequest;
+		public String processMsg (ArrayList<String> msg) throws IOException{
+			String dataSorter, clientIP, roomName, clientName;
 			int clientPort, clientID, roomRef;
 			ClientChat cc;
 			
-
-			joinRequest = msg.split("\n");
-			if (msg.startsWith("HELO")){
-				dataSorter = msg + "\nIP:" + socket.getLocalAddress().toString().substring(1) + "\nPort:" + sSocket.getLocalPort() + "\nStudentID:15333481";
+			if (msg.get(0).startsWith("HELO")){
+				dataSorter = msg.get(0) + "\nIP:" + socket.getLocalAddress().toString().substring(1) + "\nPort:" + sSocket.getLocalPort() + "\nStudentID:15333481";
 			}
-			else if(msg.equals("KILL_SERVICE")){
+			else if(msg.get(0).startsWith("KILL_SERVICE")){
 				killServer = true;
 				try {
 					socket.close();
@@ -280,12 +310,11 @@ public class MyServer {
 				server.stopServer();
 				dataSorter = null;
 			}
-			else if(msg.startsWith("JOIN_CHATROOM")){
-				roomName = joinRequest[0].substring(14);
+			else if(msg.get(0).startsWith("JOIN_CHATROOM")){
+				roomName = msg.get(0).substring(14);
 				clientIP = socket.getInetAddress().getHostAddress();
 				clientPort = socket.getPort();
-				clientName = joinRequest[3].substring(12);
-				System.out.println("Request to join chat room : " + roomName);
+				clientName = msg.get(3).substring(12);
 				
 				// Check if the room exists in the book, if yes, add the new client to the clients list 
 				// and warn the others
@@ -295,25 +324,25 @@ public class MyServer {
 					roomRef = getRoomRefFromName(roomName);
 					cc = new ClientChat(clientName, clientIP, clientPort, clientID, socket);
 					addUserToRoom(roomRef, cc);
-					dataSorter = "\nJOINED_CHATROOM:" + roomName + "\nSERVER_IP:" + sSocket.getLocalSocketAddress() + "\nPORT:"+sSocket.getLocalPort() + "\nROOM_REF:" + roomRef +"\nJOIN_ID:" + clientID;
-					msgToSend = "A new client has joined the chat room. Welcome, ";
-					broadcast(getChatRoomFromRef(roomRef), cc.getNick(), msgToSend);
-				}
-				else if (msg.startsWith("CHAT")){
-					dataSorter = msgDeadler(joinRequest);
-				}
-				else if (msg.startsWith("LEAVE_CHATROOM")){
-					roomRef = Integer.parseInt(joinRequest[0].substring(15));
-					dataSorter = leaveChat(getChatRoomFromRef(roomRef), msg);
-				}
-				else if (msg.startsWith("DISCONNECT")){
-					disconnectUser(joinRequest[2].substring(12));
-					dataSorter = null;
+					dataSorter = "JOINED_CHATROOM:" + roomName + "\nSERVER_IP:" + sSocket.getInetAddress().getHostAddress() + "\nPORT:"+sSocket.getLocalPort() + "\nROOM_REF:" + roomRef +"\nJOIN_ID:" + clientID;
 				}
 				else
 				{
-					dataSorter = errorHandler(1);				}
+					dataSorter = errorHandler(1);				
+				}
 			}
+			else if (msg.get(0).startsWith("CHAT")){
+				dataSorter = msgDealer(msg);
+			}
+			else if (msg.get(0).startsWith("LEAVE_CHATROOM")){
+				roomRef = Integer.parseInt(msg.get(0).substring(15));
+				dataSorter = leaveChat(getChatRoomFromRef(roomRef), msg);
+			}
+			else if (msg.get(0).startsWith("DISCONNECT")){
+				disconnectUser(msg.get(2).substring(12));
+				dataSorter = null;
+			}
+			
 			else{
 				dataSorter = errorHandler(2);
 			}
@@ -330,6 +359,7 @@ public class MyServer {
 		 * If a message has to be sent back, it write it back to the client
 		 */
 		public void run() {
+			int i;
 			try {
 				PrintStream os = new PrintStream(socket.getOutputStream());
 				InputStreamReader is = new InputStreamReader(socket.getInputStream());
@@ -338,12 +368,19 @@ public class MyServer {
 				while(!killServer){
 					request = d.readLine();
 					System.out.println(date.toString() + " Server request : " + request);
-					if(this.processMsg(request) == null){
+					addReqTable(request);
+					for (i=msgMakingLoop(request);i<5;i++)
+					{
+						request = d.readLine();
+						addReqTable(request);
+						i++;
+					}
+					if(this.processMsg(reqTable) == null){
 						System.out.println("Service terminated by client.");
 					}
 					else {
 						os.flush();
-						os.println(this.processMsg(request));
+						os.println(this.processMsg(reqTable));
 					}
 				}
 			} catch (IOException e) {
