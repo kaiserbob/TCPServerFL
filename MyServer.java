@@ -381,6 +381,7 @@ public class MyServer {
 					else {
 						os.flush();
 						os.println(this.processMsg(reqTable));
+						reqTable.clear();
 					}
 				}
 			} catch (IOException e) {
