@@ -246,7 +246,7 @@ public class MyServer {
 		 * @return : Returns a string, the original message
 		 */
 		public String msgDealer(ArrayList<String> msg){
-			String retour = "CHAT:"+msg.get(0).substring(5)+"\nJOIN_ID:"+msg.get(2).substring(12)+"\nMESSAGE:"+msg.get(3).substring(8);
+			String retour = "CHAT:"+msg.get(0).substring(5)+"\nCLIENT_NAME:"+msg.get(2).substring(12)+"\nMESSAGE:"+msg.get(3).substring(8);
 			try {
 				broadcast(getChatRoomFromRef(Integer.parseInt(msg.get(0).substring(5))), msg.get(2).substring(12), retour);
 			} catch (NumberFormatException | IOException e) {
@@ -324,7 +324,7 @@ public class MyServer {
 					roomRef = getRoomRefFromName(roomName);
 					cc = new ClientChat(clientName, clientIP, clientPort, clientID, socket);
 					addUserToRoom(roomRef, cc);
-					dataSorter = "JOINED_CHATROOM:" + roomName + "\nSERVER_IP:" + sSocket.getInetAddress().getHostAddress() + "\nPORT:"+sSocket.getLocalPort() + "\nROOM_REF:" + roomRef +"\nJOIN_ID:" + clientID;
+					dataSorter = "JOINED_CHATROOM:" + roomName + "\nSERVER_IP:" + sSocket.getInetAddress().getHostAddress() + "\nPORT:"+sSocket.getLocalPort() + "\nROOM_REF:" + roomRef +"\nJOIN_ID:" + clientID + "\nCHAT:"+roomRef+"\nCLIENT_NAME:"+msg.get(3).substring(12)+"\nMESSAGE:"+msg.get(3).substring(12)+" has joined this chatroom.\n";
 				}
 				else
 				{
@@ -379,6 +379,7 @@ public class MyServer {
 						System.out.println("Service terminated by client.");
 					}
 					else {
+						System.out.println("Processing "+reqTable.get(0)+" Request of the client.");
 						os.flush();
 						os.println(this.processMsg(reqTable));
 						reqTable.clear();
