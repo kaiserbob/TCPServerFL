@@ -22,6 +22,8 @@ public class MyServer {
 		this.roomsBook = new ArrayList <ChatRoom> ();
 		ChatRoom r1 = new ChatRoom("room1");
 		this.roomsBook.add(r1);
+		ChatRoom r2 = new ChatRoom("room2");
+		this.roomsBook.add(r2);
 		
 	}
 	
@@ -54,6 +56,7 @@ public class MyServer {
 		private ArrayList <String> reqTable;
 		private MyServer server;
 		private boolean killServer;
+		private int broadcastType = 0;
 		
 		public RunServer(Socket socket, MyServer server){
 			this.socket = socket;
@@ -161,9 +164,16 @@ public class MyServer {
 		 */
 		public void broadcast (ChatRoom cr, String userName, String msg) throws IOException {
 			Iterator <ClientChat> it = cr.getChatUsers().iterator();
+			ClientChat ccTemp;
 			while (it.hasNext())
 			{
-				sendMsg(it.next().getSocket(), msg);
+				ccTemp = it.next();
+				if (ccTemp.getNick().equals(userName.split("\n")[0]))
+				{
+					
+				}
+				else
+					sendMsg(ccTemp.getSocket(), msg);
 			}
 		}
 		
@@ -175,16 +185,16 @@ public class MyServer {
 		 */
 		public String leaveChat(ChatRoom cr, ArrayList <String> msg) throws IOException {
 			String retour = "";
-			Iterator <ClientChat> it = cr.getChatUsers().iterator();
-			retour = "LEFT_CHATROOM:" + msg.get(0).substring(15) + "\nJOIN_ID:" + msg.get(1).substring(8);
-			while (it.hasNext())
+			//Iterator <ClientChat> it = cr.getChatUsers().iterator();
+			retour = "LEFT_CHATROOM:" + msg.get(0).substring(16) + "\nJOIN_ID:" + msg.get(1).substring(9);
+			/*while (it.hasNext())
 			{
-				if (Integer.parseInt(msg.get(1).substring(8)) == it.next().getJoined_id())
+				if (Integer.parseInt(msg.get(1).substring(9)) == it.next().getJoined_id())
 				{
 					broadcast(cr, it.next().getNick(), "A client has left the room. Good bye, " + msg.get(2).substring(12));
 					it.remove();
 				}
-			}
+			}*/
 			return retour;
 		}
 		
@@ -239,6 +249,7 @@ public class MyServer {
 				e.printStackTrace();
 			}
 		}
+		
 		
 		/**
 		 * Use this method to send chat messages to all the clients of the chat room
@@ -296,6 +307,7 @@ public class MyServer {
 			String dataSorter, clientIP, roomName, clientName;
 			int clientPort, clientID, roomRef;
 			ClientChat cc;
+			ChatRoom crTemp;
 			
 			if (msg.get(0).startsWith("HELO")){
 				dataSorter = msg.get(0) + "\nIP:" + socket.getLocalAddress().toString().substring(1) + "\nPort:" + sSocket.getLocalPort() + "\nStudentID:15333481";
@@ -324,7 +336,17 @@ public class MyServer {
 					roomRef = getRoomRefFromName(roomName);
 					cc = new ClientChat(clientName, clientIP, clientPort, clientID, socket);
 					addUserToRoom(roomRef, cc);
-					dataSorter = "JOINED_CHATROOM:" + roomName + "\nSERVER_IP:" + sSocket.getInetAddress().getHostAddress() + "\nPORT:"+sSocket.getLocalPort() + "\nROOM_REF:" + roomRef +"\nJOIN_ID:" + clientID + "\nCHAT:"+roomRef+"\nCLIENT_NAME:"+msg.get(3).substring(12)+"\nMESSAGE:"+msg.get(3).substring(12)+" has joined this chatroom.\n";
+					dataSorter = "JOINED_CHATROOM:" + roomName + "\nSERVER_IP:" + sSocket.getInetAddress().getHostAddress() + "\nPORT:"+sSocket.getLocalPort() + "\nROOM_REF:" + roomRef +"\nJOIN_ID:" + clientID + "\nCHAT:"+roomRef+"\nCLIENT_NAME:"+msg.get(3).substring(12)+"\nMESSAGE:"+msg.get(3).substring(12)+" has joined this chatroom.";
+					Iterator <ChatRoom> it = roomsBook.iterator();
+					while (it.hasNext())
+					{
+						crTemp = it.next();
+						
+						if (crTemp.getChatUsers().size() > 1)
+						{
+							broadcastType = 1;
+						}
+					}
 				}
 				else
 				{
@@ -335,8 +357,19 @@ public class MyServer {
 				dataSorter = msgDealer(msg);
 			}
 			else if (msg.get(0).startsWith("LEAVE_CHATROOM")){
-				roomRef = Integer.parseInt(msg.get(0).substring(15));
-				dataSorter = leaveChat(getChatRoomFromRef(roomRef), msg);
+				roomRef = Integer.parseInt(msg.get(0).substring(16));
+				//dataSorter = leaveChat(getChatRoomFromRef(roomRef), msg);
+				dataSorter = "LEFT_CHATROOM:" + msg.get(0).substring(15) + "\nJOIN_ID:" + msg.get(1).substring(8) + "\nCHAT:"+roomRef+"\nCLIENT_NAME:"+msg.get(2).substring(12)+"\nMESSAGE:"+msg.get(2).substring(12)+" has left the chatroom.";
+				Iterator <ChatRoom> it = roomsBook.iterator();
+				while (it.hasNext())
+				{
+					crTemp = it.next();
+					
+					if (crTemp.getChatUsers().size() > 1)
+					{
+						broadcastType = 1;
+					}
+				}
 			}
 			else if (msg.get(0).startsWith("DISCONNECT")){
 				disconnectUser(msg.get(2).substring(12));
@@ -360,6 +393,7 @@ public class MyServer {
 		 */
 		public void run() {
 			int i;
+			ChatRoom ccTemp = new ChatRoom();
 			try {
 				PrintStream os = new PrintStream(socket.getOutputStream());
 				InputStreamReader is = new InputStreamReader(socket.getInputStream());
@@ -382,6 +416,35 @@ public class MyServer {
 						System.out.println("Processing "+reqTable.get(0)+" Request of the client.");
 						os.flush();
 						os.println(this.processMsg(reqTable));
+						if (broadcastType == 1)
+						{
+							Iterator <ChatRoom> it = roomsBook.iterator();
+							while (it.hasNext())
+							{
+								ccTemp = it.next();
+								if (ccTemp.getName().equals(reqTable.get(0).substring(14).split("\n")[0]))
+								{
+									broadcast(ccTemp, reqTable.get(3).substring(12), "CHAT:"+ccTemp.getRoom_ref()+"\nCLIENT_NAME:"+reqTable.get(3).substring(12)+"\nMESSAGE:"+reqTable.get(3).substring(12)+" has joined this chatroom.");
+									broadcastType = 0;
+									System.out.println("Valeur du type de broadcast qd je sors de la boucle 1 :"+ broadcastType);
+								}
+							}
+						}
+						if (broadcastType == 2)
+						{
+							Iterator <ChatRoom> it = roomsBook.iterator();
+							while (it.hasNext())
+							{
+								ccTemp = it.next();
+								if (ccTemp.getName().equals(reqTable.get(0).substring(14).split("\n")[0]))
+								{
+									System.out.println(ccTemp.getName());
+									broadcast(ccTemp, reqTable.get(2).substring(12),"MESSAGE:"+reqTable.get(2).substring(12)+" has left the chatroom.");
+									broadcastType = 0;
+									System.out.println("Valeur du type de broadcast qd je sors de la boucle 2 :"+ broadcastType);
+								}
+							}
+						}
 						reqTable.clear();
 					}
 				}
